@@ -1,6 +1,8 @@
 const fs = require("fs");
 const path = require("path");
-const nanoid = require("nanoid");
+const { nanoid } = require("nanoid");
+const { Transform } = require("stream");
+
 const contactsPath = path.resolve("db", "contacts.json");
 
 function listContacts() {
@@ -47,29 +49,46 @@ function removeContact(contactId) {
     console.log(`No contact with id: ${contactId}.`);
   });
 }
-const readableStream = fs.createReadStream(contactsPath, "utf8");
-const writableStream = fs.createWriteStream(contactsPath);
+
+const streamPath = path.resolve("db", "stream.json");
+const readStream = fs.createReadStream(contactsPath, "utf8");
+const writeStream = fs.createWriteStream(streamPath);
+
+// Tranform stream to combine readstream(new contact credentials) adn writestream (add new contact object to contacts array)
+class addNewContact extends Transform {
+  constructor(name, email, phone) {
+    super();
+    this.name = name;
+    this.email = email;
+    this.phone = phone;
+  }
+
+  _transform(bufferChunk, encoding, callback) {
+    const parsed = JSON.parse(bufferChunk.toString());
+    const listWithNewContact = [
+      ...parsed,
+      { id: nanoid(), name: this.name, email: this.email, phone: this.phone },
+    ];
+    const jsonList = JSON.stringify(listWithNewContact, null, 2);
+
+    this.push(jsonList);
+    callback();
+  }
+}
+
+// _____________________________________________________________________________________________________
+
 function addContact(name, email, phone) {
-  readableStream.on("data", () => {
-    // console.log(chunk);
-    console.log(name, email, phone);
-    const y = JSON.stringify(name, null, 2);
-    writableStream.write(y);
-  });
+  // xStream - stream for transforming readable stream
+  const xStream = new addNewContact(name, email, phone);
 
-  writableStream.end();
-  //   contactList = JSON.parse(contactList)
-  //   .push({
-  //     id: nanoid(),
-  //     name,
-  //     email,
-  //     phone,
-  //   });
-
-  //   fs.writeFile(contactsPath, JSON.stringify(contactList, null, 2), (error) => {
-  //     if (error) console.error(error.message);
-  //     return;
-  //   });
+  //   combine streams
+  readStream
+    .pipe(xStream)
+    .pipe(writeStream)
+    .on("finish", () => {
+      console.log("Finished");
+    });
 }
 
 module.exports = { listContacts, getContactById, removeContact, addContact };
