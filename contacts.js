@@ -1,18 +1,19 @@
 const fs = require("fs");
 const path = require("path");
 const { nanoid } = require("nanoid");
-const { Transform } = require("stream");
 
-const contactsPath = path.resolve("db", "contacts.json");
+const contactsPath = path.resolve("json", "contacts.json");
 
 function listContacts() {
-  fs.readFile(contactsPath, "utf8", (error, contactList) => {
-    error ? console.error(error.message) : console.table(contactList);
+  fs.readFile(contactsPath, (error, contactList) => {
+    error
+      ? console.error(error.message)
+      : console.table(JSON.parse(contactList));
   });
 }
 
 function getContactById(contactId) {
-  fs.readFile(contactsPath, "utf8", (error, contactList) => {
+  fs.readFile(contactsPath, (error, contactList) => {
     contactList = JSON.parse(contactList);
 
     const foundContact = contactList.find(
@@ -23,7 +24,7 @@ function getContactById(contactId) {
 }
 
 function removeContact(contactId) {
-  fs.readFile(contactsPath, "utf8", (error, contactList) => {
+  fs.readFile(contactsPath, (error, contactList) => {
     contactList = JSON.parse(contactList);
 
     const foundContact = contactList.find(
@@ -50,45 +51,24 @@ function removeContact(contactId) {
   });
 }
 
-const streamPath = path.resolve("db", "stream.json");
-const readStream = fs.createReadStream(contactsPath, "utf8");
-const writeStream = fs.createWriteStream(streamPath);
-
-// Tranform stream to combine readstream(new contact credentials) adn writestream (add new contact object to contacts array)
-class addNewContact extends Transform {
-  constructor(name, email, phone) {
-    super();
-    this.name = name;
-    this.email = email;
-    this.phone = phone;
-  }
-
-  _transform(bufferChunk, encoding, callback) {
-    const parsed = JSON.parse(bufferChunk.toString());
-    const listWithNewContact = [
-      ...parsed,
-      { id: nanoid(), name: this.name, email: this.email, phone: this.phone },
-    ];
-    const jsonList = JSON.stringify(listWithNewContact, null, 2);
-
-    this.push(jsonList);
-    callback();
-  }
-}
-
-// _____________________________________________________________________________________________________
-
 function addContact(name, email, phone) {
-  // xStream - stream for transforming readable stream
-  const xStream = new addNewContact(name, email, phone);
+  fs.readFile(contactsPath, (error, contactList) => {
+    const parsedList = JSON.parse(contactList);
+    const listWithNewContact = [
+      ...parsedList,
+      { id: nanoid(), name, email, phone },
+    ];
 
-  //   combine streams
-  readStream
-    .pipe(xStream)
-    .pipe(writeStream)
-    .on("finish", () => {
-      console.log("Finished");
-    });
+    fs.writeFile(
+      contactsPath,
+      JSON.stringify(listWithNewContact, null, 2),
+      (error) => {
+        return error
+          ? console.error(error.message)
+          : console.table(listWithNewContact);
+      }
+    );
+  });
 }
 
 module.exports = { listContacts, getContactById, removeContact, addContact };
